@@ -1,0 +1,1047 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>PostgreSQL for MySQL Developers — A Field Guide</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --ink:#080c17;
+    --ink-2:#0e1424;
+    --card:#121a2e;
+    --card-2:#16203a;
+    --line:#243049;
+    --line-soft:#1b2336;
+    --pg:#5aa9e6;          /* postgres elephant blue */
+    --pg-deep:#336791;     /* official postgres blue */
+    --pg-glow:rgba(90,169,230,.14);
+    --my:#f0a64e;          /* mysql amber */
+    --my-glow:rgba(240,166,78,.12);
+    --tip:#5ec98b;
+    --warn:#ef8d6a;
+    --text:#e7ecf6;
+    --muted:#9aa6be;
+    --muted-2:#6c7790;
+    --radius:14px;
+    --mono:'JetBrains Mono',ui-monospace,SFMono-Regular,Menlo,monospace;
+    --disp:'Space Grotesk',system-ui,sans-serif;
+    --body:'Inter',system-ui,sans-serif;
+  }
+  *{box-sizing:border-box}
+  html{scroll-behavior:smooth}
+  body{
+    margin:0;background:var(--ink);color:var(--text);
+    font-family:var(--body);font-size:16px;line-height:1.65;
+    -webkit-font-smoothing:antialiased;
+  }
+  body::before{
+    content:"";position:fixed;inset:0;z-index:-1;pointer-events:none;
+    background:
+      radial-gradient(900px 500px at 78% -8%, var(--pg-glow), transparent 60%),
+      radial-gradient(700px 420px at 0% 8%, var(--my-glow), transparent 55%);
+  }
+  a{color:var(--pg);text-decoration:none}
+  a:hover{text-decoration:underline}
+  ::selection{background:var(--pg-deep);color:#fff}
+
+  /* ---------- Layout ---------- */
+  .shell{display:grid;grid-template-columns:300px 1fr;gap:0;max-width:1500px;margin:0 auto}
+  .sidebar{
+    position:sticky;top:0;height:100vh;overflow-y:auto;
+    border-right:1px solid var(--line-soft);padding:26px 18px 40px;
+    background:linear-gradient(180deg,var(--ink),#070a12);
+  }
+  .sidebar::-webkit-scrollbar{width:8px}
+  .sidebar::-webkit-scrollbar-thumb{background:var(--line);border-radius:8px}
+  .main{min-width:0;padding:0 clamp(20px,5vw,72px) 120px}
+
+  /* ---------- Sidebar ---------- */
+  .brand{display:flex;align-items:center;gap:11px;margin-bottom:6px}
+  .brand .mark{
+    width:34px;height:34px;border-radius:9px;flex:0 0 auto;
+    background:conic-gradient(from 210deg,var(--pg),var(--pg-deep),#1f3a52);
+    display:grid;place-items:center;font-family:var(--disp);font-weight:700;
+    color:#fff;font-size:18px;box-shadow:0 4px 16px rgba(51,103,145,.4);
+  }
+  .brand .t{font-family:var(--disp);font-weight:700;font-size:15px;letter-spacing:.2px;line-height:1.15}
+  .brand .t small{display:block;font-weight:500;color:var(--muted-2);font-size:11px;letter-spacing:.6px;text-transform:uppercase}
+
+  .progress-wrap{margin:20px 2px 22px}
+  .progress-meta{display:flex;justify-content:space-between;font-size:12px;color:var(--muted);margin-bottom:7px;font-family:var(--mono)}
+  .progress-track{height:6px;border-radius:6px;background:var(--line-soft);overflow:hidden}
+  .progress-fill{height:100%;width:0;border-radius:6px;background:linear-gradient(90deg,var(--pg-deep),var(--pg));transition:width .5s cubic-bezier(.2,.8,.2,1)}
+
+  .nav{list-style:none;margin:0;padding:0}
+  .nav .grp{font-family:var(--mono);font-size:10.5px;letter-spacing:1.4px;text-transform:uppercase;color:var(--muted-2);margin:18px 10px 8px}
+  .nav a{
+    display:flex;align-items:center;gap:10px;padding:7px 10px;border-radius:9px;
+    color:var(--muted);font-size:13.5px;line-height:1.3;transition:background .15s,color .15s;
+  }
+  .nav a:hover{background:var(--card);color:var(--text);text-decoration:none}
+  .nav a.active{background:var(--pg-glow);color:#fff}
+  .nav a.active .dot{border-color:var(--pg);background:var(--pg)}
+  .nav a .dot{width:9px;height:9px;border-radius:50%;border:1.5px solid var(--line);flex:0 0 auto;transition:.2s}
+  .nav a.done .dot{background:var(--tip);border-color:var(--tip)}
+  .nav a.done .dot::after{content:"✓";position:absolute}
+
+  /* ---------- Hero ---------- */
+  .hero{padding:78px 0 54px;border-bottom:1px solid var(--line-soft)}
+  .eyebrow{
+    display:inline-flex;align-items:center;gap:9px;font-family:var(--mono);
+    font-size:12px;letter-spacing:2px;text-transform:uppercase;color:var(--pg);
+    border:1px solid var(--line);background:var(--card);padding:6px 13px;border-radius:100px;margin-bottom:26px;
+  }
+  .eyebrow .pulse{width:7px;height:7px;border-radius:50%;background:var(--pg);box-shadow:0 0 0 0 var(--pg);animation:pulse 2.4s infinite}
+  @keyframes pulse{0%{box-shadow:0 0 0 0 rgba(90,169,230,.5)}70%{box-shadow:0 0 0 9px rgba(90,169,230,0)}100%{box-shadow:0 0 0 0 rgba(90,169,230,0)}}
+  h1.hero-title{
+    font-family:var(--disp);font-weight:700;font-size:clamp(2.4rem,6vw,4.4rem);
+    line-height:1.02;letter-spacing:-1.5px;margin:0 0 22px;max-width:14ch;
+  }
+  h1.hero-title em{font-style:normal;color:var(--pg);position:relative}
+  h1.hero-title .pct{color:var(--my)}
+  .hero-sub{font-size:clamp(1.05rem,2vw,1.3rem);color:var(--muted);max-width:62ch;line-height:1.55}
+  .hero-sub b{color:var(--text);font-weight:600}
+  .legend{display:flex;flex-wrap:wrap;gap:14px;margin-top:34px}
+  .legend .chip{display:flex;align-items:center;gap:9px;font-size:13px;color:var(--muted);font-family:var(--mono);background:var(--card);border:1px solid var(--line);padding:8px 14px;border-radius:10px}
+  .legend .sw{width:14px;height:14px;border-radius:4px}
+  .sw.my{background:var(--my)} .sw.pg{background:var(--pg)}
+
+  .hero-stats{display:grid;grid-template-columns:repeat(3,1fr);gap:14px;margin-top:40px;max-width:620px}
+  .hstat{background:var(--card);border:1px solid var(--line);border-radius:var(--radius);padding:16px 18px}
+  .hstat .n{font-family:var(--disp);font-weight:700;font-size:1.9rem;line-height:1;color:var(--pg)}
+  .hstat .l{font-size:12px;color:var(--muted);margin-top:6px;line-height:1.35}
+
+  /* ---------- Sections ---------- */
+  section.module{padding:54px 0;border-bottom:1px solid var(--line-soft);scroll-margin-top:18px}
+  .mod-head{display:flex;align-items:flex-start;gap:18px;margin-bottom:8px}
+  .mod-num{
+    font-family:var(--mono);font-size:13px;font-weight:700;color:var(--ink);
+    background:var(--pg);width:34px;height:34px;border-radius:9px;display:grid;place-items:center;flex:0 0 auto;margin-top:6px;
+  }
+  .mod-head h2{font-family:var(--disp);font-weight:700;font-size:clamp(1.6rem,3.2vw,2.2rem);letter-spacing:-.6px;margin:0;line-height:1.1}
+  .mod-head .sub{color:var(--muted);font-size:15px;margin-top:6px;display:block}
+  .mark-done{
+    margin-left:auto;flex:0 0 auto;display:inline-flex;align-items:center;gap:8px;cursor:pointer;
+    font-family:var(--mono);font-size:12px;color:var(--muted);background:var(--card);
+    border:1px solid var(--line);padding:8px 13px;border-radius:100px;transition:.18s;user-select:none;white-space:nowrap;margin-top:4px;
+  }
+  .mark-done:hover{border-color:var(--tip);color:var(--text)}
+  .mark-done .box{width:15px;height:15px;border-radius:5px;border:1.5px solid var(--line);display:grid;place-items:center;font-size:11px;color:var(--ink);transition:.18s}
+  .mark-done.on{color:var(--tip);border-color:rgba(94,201,139,.4)}
+  .mark-done.on .box{background:var(--tip);border-color:var(--tip)}
+  .mod-body{margin-top:22px}
+  .mod-body > p{color:var(--muted);max-width:74ch}
+  .mod-body p b, .mod-body li b{color:var(--text);font-weight:600}
+  .mod-body h3{font-family:var(--disp);font-weight:600;font-size:1.15rem;margin:34px 0 12px;letter-spacing:-.3px}
+  .mod-body ul{padding-left:0;list-style:none;margin:14px 0;max-width:78ch}
+  .mod-body ul li{position:relative;padding-left:24px;margin:9px 0;color:var(--muted)}
+  .mod-body ul li::before{content:"";position:absolute;left:4px;top:11px;width:6px;height:6px;border-radius:2px;background:var(--pg);transform:rotate(45deg)}
+  kbd,code.inline{font-family:var(--mono);font-size:.86em;background:var(--ink-2);border:1px solid var(--line);border-radius:6px;padding:1.5px 6px;color:#cfe2f5}
+
+  /* ---------- Rosetta (signature) ---------- */
+  .rosetta{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin:22px 0}
+  .dialect{background:var(--card);border:1px solid var(--line);border-radius:var(--radius);overflow:hidden;position:relative}
+  .dialect::before{content:"";position:absolute;top:0;left:0;right:0;height:3px}
+  .dialect.my::before{background:linear-gradient(90deg,var(--my),transparent)}
+  .dialect.pg::before{background:linear-gradient(90deg,var(--pg),transparent)}
+  .dialect .lbl{display:flex;align-items:center;gap:9px;padding:13px 16px 10px;font-family:var(--mono);font-size:11.5px;letter-spacing:1.3px;text-transform:uppercase}
+  .dialect.my .lbl{color:var(--my)} .dialect.pg .lbl{color:var(--pg)}
+  .dialect .lbl .arrow{margin-left:auto;color:var(--muted-2);font-size:14px}
+  .code{position:relative}
+  pre{margin:0;padding:6px 16px 18px;overflow-x:auto;font-family:var(--mono);font-size:13px;line-height:1.6}
+  pre::-webkit-scrollbar{height:7px}
+  pre::-webkit-scrollbar-thumb{background:var(--line);border-radius:7px}
+  code{font-family:var(--mono)}
+  .copy{
+    position:absolute;top:8px;right:8px;font-family:var(--mono);font-size:11px;color:var(--muted);
+    background:var(--ink-2);border:1px solid var(--line);border-radius:7px;padding:5px 9px;cursor:pointer;opacity:0;transition:.16s;z-index:2;
+  }
+  .dialect:hover .copy,.codeblock:hover .copy{opacity:1}
+  .copy:hover{color:var(--text);border-color:var(--pg)}
+  .copy.copied{color:var(--tip);border-color:var(--tip)}
+
+  /* standalone code block */
+  .codeblock{position:relative;background:var(--card);border:1px solid var(--line);border-radius:var(--radius);margin:20px 0;overflow:hidden}
+  .codeblock .cb-lbl{padding:11px 16px 6px;font-family:var(--mono);font-size:11px;letter-spacing:1.2px;text-transform:uppercase;color:var(--muted-2)}
+
+  /* syntax colors */
+  .t-key{color:#7cc3f2;font-weight:500}
+  .t-str{color:#b6e3a4}
+  .t-com{color:var(--muted-2);font-style:italic}
+  .t-num{color:#f0b27a}
+  .t-fn{color:#c5a3f0}
+  .t-meta{color:var(--my)}
+
+  /* callouts */
+  .callout{display:flex;gap:14px;border-radius:var(--radius);padding:16px 18px;margin:20px 0;border:1px solid var(--line);background:var(--card)}
+  .callout .ico{flex:0 0 auto;width:30px;height:30px;border-radius:8px;display:grid;place-items:center;font-size:15px}
+  .callout .ct{font-size:14.5px;color:var(--muted);line-height:1.55}
+  .callout .ct strong{display:block;color:var(--text);font-family:var(--disp);font-weight:600;font-size:14px;margin-bottom:3px;letter-spacing:.2px}
+  .callout.gotcha{border-color:rgba(239,141,106,.35);background:linear-gradient(180deg,rgba(239,141,106,.07),var(--card))}
+  .callout.gotcha .ico{background:rgba(239,141,106,.16);color:var(--warn)}
+  .callout.win{border-color:rgba(94,201,139,.32);background:linear-gradient(180deg,rgba(94,201,139,.06),var(--card))}
+  .callout.win .ico{background:rgba(94,201,139,.16);color:var(--tip)}
+  .callout.note .ico{background:var(--pg-glow);color:var(--pg)}
+
+  /* ---------- Cheat sheet ---------- */
+  .cheat-search{width:100%;max-width:480px;margin:18px 0 6px;display:flex;align-items:center;gap:10px;background:var(--card);border:1px solid var(--line);border-radius:11px;padding:11px 15px}
+  .cheat-search input{flex:1;background:none;border:0;outline:0;color:var(--text);font-family:var(--mono);font-size:14px}
+  .cheat-search input::placeholder{color:var(--muted-2)}
+  .cheat-search .ic{color:var(--muted-2)}
+  .tbl-wrap{overflow-x:auto;border:1px solid var(--line);border-radius:var(--radius);margin-top:16px}
+  table{width:100%;border-collapse:collapse;font-size:13.5px;min-width:640px}
+  thead th{text-align:left;font-family:var(--mono);font-size:11px;letter-spacing:1px;text-transform:uppercase;color:var(--muted-2);padding:13px 16px;background:var(--ink-2);border-bottom:1px solid var(--line)}
+  tbody td{padding:12px 16px;border-bottom:1px solid var(--line-soft);vertical-align:top}
+  tbody tr:last-child td{border-bottom:0}
+  tbody tr:hover{background:var(--card-2)}
+  td.my code,td code.my-c{color:#f3c089}
+  td.pg code,td code.pg-c{color:#9fd0f5}
+  td code{font-family:var(--mono);font-size:12.5px}
+  .no-res{padding:24px 16px;color:var(--muted-2);font-family:var(--mono);font-size:13px;display:none}
+
+  /* ---------- Quiz ---------- */
+  .quiz-card{background:var(--card);border:1px solid var(--line);border-radius:var(--radius);padding:22px;margin:18px 0}
+  .quiz-q{font-family:var(--disp);font-weight:600;font-size:1.05rem;margin-bottom:14px;display:flex;gap:11px}
+  .quiz-q .qn{color:var(--pg);font-family:var(--mono);font-size:14px;flex:0 0 auto}
+  .opt{display:block;width:100%;text-align:left;background:var(--ink-2);border:1px solid var(--line);color:var(--text);padding:12px 15px;border-radius:10px;margin:8px 0;cursor:pointer;font-family:var(--body);font-size:14px;transition:.14s}
+  .opt:hover{border-color:var(--pg)}
+  .opt.correct{border-color:var(--tip);background:rgba(94,201,139,.12);color:#bff0d2}
+  .opt.wrong{border-color:var(--warn);background:rgba(239,141,106,.1);color:#f6c4b1}
+  .opt:disabled{cursor:default}
+  .quiz-exp{margin-top:12px;font-size:13.5px;color:var(--muted);padding:12px 15px;background:var(--ink-2);border-radius:10px;border-left:3px solid var(--pg);display:none}
+  .quiz-exp.show{display:block}
+
+  /* footer */
+  .footer{padding:56px 0 0}
+  .res-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:14px;margin-top:22px}
+  .res{background:var(--card);border:1px solid var(--line);border-radius:var(--radius);padding:18px;transition:.18s;display:block}
+  .res:hover{border-color:var(--pg);transform:translateY(-2px);text-decoration:none}
+  .res .rt{font-family:var(--disp);font-weight:600;color:var(--text);margin-bottom:5px}
+  .res .rd{font-size:13px;color:var(--muted)}
+  .end-note{margin-top:40px;color:var(--muted-2);font-size:13px;font-family:var(--mono);text-align:center}
+
+  /* mobile */
+  .menu-btn{display:none}
+  @media(max-width:980px){
+    .shell{grid-template-columns:1fr}
+    .sidebar{position:fixed;left:0;top:0;width:300px;z-index:50;transform:translateX(-100%);transition:transform .28s ease;box-shadow:0 0 60px rgba(0,0,0,.6)}
+    .sidebar.open{transform:translateX(0)}
+    .menu-btn{display:flex;position:fixed;top:14px;left:14px;z-index:60;width:46px;height:46px;border-radius:12px;background:var(--card);border:1px solid var(--line);color:var(--text);align-items:center;justify-content:center;cursor:pointer;font-size:20px}
+    .scrim{display:none;position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:40}
+    .scrim.show{display:block}
+    .main{padding-top:64px}
+    .hero{padding-top:30px}
+    .rosetta{grid-template-columns:1fr}
+    .hero-stats{grid-template-columns:1fr}
+  }
+  @media(prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important;scroll-behavior:auto}}
+</style>
+</head>
+<body>
+
+<button class="menu-btn" id="menuBtn" aria-label="Toggle navigation">☰</button>
+<div class="scrim" id="scrim"></div>
+
+<div class="shell">
+  <!-- ============ SIDEBAR ============ -->
+  <aside class="sidebar" id="sidebar">
+    <div class="brand">
+      <div class="mark">⌖</div>
+      <div class="t">PG Field Guide<small>for MySQL developers</small></div>
+    </div>
+
+    <div class="progress-wrap">
+      <div class="progress-meta"><span>Progress</span><span id="progTxt">0 / 13</span></div>
+      <div class="progress-track"><div class="progress-fill" id="progFill"></div></div>
+    </div>
+
+    <nav>
+      <ul class="nav" id="navList">
+        <li class="grp">Foundations</li>
+        <li><a href="#mindset" data-mod><span class="dot"></span>The mental model shift</a></li>
+        <li><a href="#tooling" data-mod><span class="dot"></span>psql &amp; the toolbelt</a></li>
+        <li><a href="#schemas" data-mod><span class="dot"></span>Databases, schemas, search_path</a></li>
+        <li><a href="#identifiers" data-mod><span class="dot"></span>Quoting &amp; case sensitivity</a></li>
+        <li class="grp">Day-to-day SQL</li>
+        <li><a href="#types" data-mod><span class="dot"></span>Data types</a></li>
+        <li><a href="#autoincrement" data-mod><span class="dot"></span>Auto-increment &amp; sequences</a></li>
+        <li><a href="#syntax" data-mod><span class="dot"></span>Syntax that bites</a></li>
+        <li><a href="#upsert" data-mod><span class="dot"></span>Upserts &amp; RETURNING</a></li>
+        <li class="grp">The good stuff</li>
+        <li><a href="#jsonb" data-mod><span class="dot"></span>JSONB &amp; arrays</a></li>
+        <li><a href="#indexes" data-mod><span class="dot"></span>Indexes &amp; full-text</a></li>
+        <li><a href="#functions" data-mod><span class="dot"></span>Functions &amp; PL/pgSQL</a></li>
+        <li><a href="#transactions" data-mod><span class="dot"></span>Transactions &amp; VACUUM</a></li>
+        <li class="grp">Reference</li>
+        <li><a href="#cheatsheet" data-mod><span class="dot"></span>Searchable cheat sheet</a></li>
+        <li><a href="#quiz"><span class="dot"></span>Self-check quiz</a></li>
+        <li><a href="#next"><span class="dot"></span>Where to go next</a></li>
+      </ul>
+    </nav>
+  </aside>
+
+  <!-- ============ MAIN ============ -->
+  <main class="main">
+    <!-- HERO -->
+    <header class="hero">
+      <div class="eyebrow"><span class="pulse"></span>Field guide · zero to fluent</div>
+      <h1 class="hero-title">You already know <span class="pct">90%</span> of <em>PostgreSQL</em>.</h1>
+      <p class="hero-sub">SQL is SQL. <b>SELECT</b>, <b>JOIN</b>, <b>GROUP BY</b>, indexes, transactions — you carry all of that across untouched. This guide skips the basics and teaches the other 10%: the dialect quirks, the gotchas that'll trip you on day one, and the genuinely better tools waiting on the other side. Think of it as a phrasebook for a language you almost already speak.</p>
+
+      <div class="legend">
+        <div class="chip"><span class="sw my"></span>What you'd write in MySQL</div>
+        <div class="chip"><span class="sw pg"></span>The PostgreSQL way</div>
+        <div class="chip">Hover any code block → <kbd>Copy</kbd></div>
+      </div>
+
+      <div class="hero-stats">
+        <div class="hstat"><div class="n">13</div><div class="l">focused modules, ordered by what you'll hit first</div></div>
+        <div class="hstat"><div class="n">5432</div><div class="l">the default port (not 3306) — start here</div></div>
+        <div class="hstat"><div class="n">~2h</div><div class="l">to read; a weekend to feel at home</div></div>
+      </div>
+    </header>
+
+    <!-- 1 MINDSET -->
+    <section class="module" id="mindset">
+      <div class="mod-head">
+        <div class="mod-num">01</div>
+        <div><h2>The mental model shift</h2><span class="sub">Before any syntax — what's fundamentally different under the hood.</span></div>
+        <button class="mark-done" data-for="mindset"><span class="box">✓</span>Mark done</button>
+      </div>
+      <div class="mod-body">
+        <p>Most MySQL→Postgres friction isn't syntax — it's expectations. A handful of architectural facts explain almost every surprise you'll meet later, so internalise these first.</p>
+        <ul>
+          <li><b>No storage engines.</b> There's no InnoDB vs MyISAM decision. Postgres has one engine, and it always does MVCC, real transactions, and foreign keys. The "which engine?" question simply disappears.</li>
+          <li><b>It's stricter and more standards-compliant.</b> Postgres tends to reject ambiguous things MySQL silently accepts — loose <code class="inline">GROUP BY</code>, implicit type coercions, invalid dates like <code class="inline">'0000-00-00'</code>. This feels annoying at first and saves you from real bugs later.</li>
+          <li><b>DDL is transactional.</b> You can wrap <code class="inline">CREATE TABLE</code>, <code class="inline">ALTER TABLE</code>, even <code class="inline">DROP</code> inside <code class="inline">BEGIN … ROLLBACK</code> and undo them. In MySQL, DDL forces an implicit commit. This single difference changes how you write migrations.</li>
+          <li><b>Extensibility is the personality.</b> Custom types, operators, index methods, procedural languages, and extensions (PostGIS, pg_trgm, pgvector…) are first-class. Postgres is less a database you configure and more a platform you extend.</li>
+          <li><b>One connection = one database.</b> Unlike MySQL where <code class="inline">USE otherdb</code> hops freely, a Postgres connection is bound to a single database. Cross-database queries aren't a thing (you use <i>schemas</i> within one database instead — module 03).</li>
+        </ul>
+        <div class="callout win">
+          <div class="ico">★</div>
+          <div class="ct"><strong>Reframe, don't relearn</strong>Every SELECT you've ever written still works. You're not a beginner here — you're an expert learning a precise dialect. Read the rest of this guide as "diffs," not "docs."</div>
+        </div>
+      </div>
+    </section>
+
+    <!-- 2 TOOLING -->
+    <section class="module" id="tooling">
+      <div class="mod-head">
+        <div class="mod-num">02</div>
+        <div><h2>psql &amp; the toolbelt</h2><span class="sub">Your muscle memory for the <code class="inline">mysql</code> CLI needs a small retraining.</span></div>
+        <button class="mark-done" data-for="tooling"><span class="box">✓</span>Mark done</button>
+      </div>
+      <div class="mod-body">
+        <p>The interactive client is <code class="inline">psql</code>. Instead of SQL statements like <code class="inline">SHOW</code>, Postgres uses <b>backslash meta-commands</b> — terse, fast, and worth memorising.</p>
+
+        <div class="rosetta">
+          <div class="dialect my">
+            <div class="lbl">MySQL CLI<span class="arrow">→</span></div>
+            <div class="code"><button class="copy">Copy</button><pre><code class="lang-sql">mysql -u root -p mydb
+
+SHOW DATABASES;
+USE shop;
+SHOW TABLES;
+DESCRIBE orders;
+SHOW CREATE TABLE orders;
+SHOW INDEX FROM orders;</code></pre></div>
+          </div>
+          <div class="dialect pg">
+            <div class="lbl">psql</div>
+            <div class="code"><button class="copy">Copy</button><pre><code class="lang-sql">psql -U postgres -d mydb     -- or: psql "postgresql://user:pass@host:5432/mydb"
+
+\l            -- list databases
+\c shop       -- connect (re-connects!)
+\dt           -- list tables
+\d orders     -- describe table + indexes
+\d+ orders    -- describe, verbose
+\di           -- list indexes</code></pre></div>
+          </div>
+        </div>
+
+        <h3>The meta-commands you'll actually use</h3>
+        <ul>
+          <li><code class="inline">\?</code> list all meta-commands · <code class="inline">\h CREATE TABLE</code> SQL help for a statement</li>
+          <li><code class="inline">\dn</code> schemas · <code class="inline">\du</code> roles/users · <code class="inline">\df</code> functions · <code class="inline">\dv</code> views</li>
+          <li><code class="inline">\x</code> toggle expanded display (lifesaver for wide rows — like MySQL's <code class="inline">\G</code>)</li>
+          <li><code class="inline">\timing</code> show query time · <code class="inline">\i file.sql</code> run a script · <code class="inline">\e</code> edit in $EDITOR</li>
+          <li><code class="inline">\copy table TO 'out.csv' CSV HEADER</code> — client-side bulk import/export</li>
+        </ul>
+        <div class="callout note">
+          <div class="ico">ⓘ</div>
+          <div class="ct"><strong>Dump &amp; restore</strong><code class="inline">mysqldump</code> → <code class="inline">pg_dump</code> / <code class="inline">pg_restore</code>. For a quick logical backup: <code class="inline">pg_dump -Fc mydb &gt; mydb.dump</code>, restore with <code class="inline">pg_restore -d newdb mydb.dump</code>.</div>
+        </div>
+      </div>
+    </section>
+
+    <!-- 3 SCHEMAS -->
+    <section class="module" id="schemas">
+      <div class="mod-head">
+        <div class="mod-num">03</div>
+        <div><h2>Databases, schemas &amp; search_path</h2><span class="sub">The concept with no clean MySQL equivalent. Get this right early.</span></div>
+        <button class="mark-done" data-for="schemas"><span class="box">✓</span>Mark done</button>
+      </div>
+      <div class="mod-body">
+        <p>In MySQL, "database" and "schema" are synonyms and you switch between them freely. In Postgres the hierarchy has an extra layer: a <b>cluster</b> holds many <b>databases</b>, and each database holds many <b>schemas</b> (namespaces), which hold your tables.</p>
+        <ul>
+          <li>A new table goes into the <code class="inline">public</code> schema by default.</li>
+          <li>The <b><code class="inline">search_path</code></b> decides which schemas are checked, in order, when you write an unqualified table name — like a PATH variable for tables.</li>
+          <li>You <b>cannot</b> join across databases in one query. If you were using multiple MySQL databases to namespace one app, use Postgres <i>schemas</i> instead — they live in the same database and join freely.</li>
+        </ul>
+        <div class="codeblock"><button class="copy">Copy</button>
+          <div class="cb-lbl">PostgreSQL</div>
+          <pre><code class="lang-sql">CREATE SCHEMA reporting;
+CREATE TABLE reporting.daily_sales (id int, total numeric);
+
+-- unqualified names resolve via search_path:
+SHOW search_path;                      -- "$user", public
+SET search_path TO reporting, public;  -- check reporting first now
+
+-- cross-schema joins are normal (same database):
+SELECT * FROM public.orders o
+JOIN reporting.daily_sales d ON d.id = o.id;</code></pre></div>
+        <div class="callout gotcha">
+          <div class="ico">⚠</div>
+          <div class="ct"><strong>"relation does not exist" after creating it</strong>Nine times out of ten your table is in a schema that isn't on the <code class="inline">search_path</code>. Either schema-qualify the name (<code class="inline">reporting.daily_sales</code>) or add the schema to your path.</div>
+        </div>
+      </div>
+    </section>
+
+    <!-- 4 IDENTIFIERS -->
+    <section class="module" id="identifiers">
+      <div class="mod-head">
+        <div class="mod-num">04</div>
+        <div><h2>Quoting &amp; case sensitivity</h2><span class="sub">The #1 source of "but it worked in MySQL!" bug reports.</span></div>
+        <button class="mark-done" data-for="identifiers"><span class="box">✓</span>Mark done</button>
+      </div>
+      <div class="mod-body">
+        <p>Two quoting rules that differ from MySQL and cause real pain if you don't know them up front.</p>
+
+        <div class="rosetta">
+          <div class="dialect my">
+            <div class="lbl">MySQL<span class="arrow">→</span></div>
+            <div class="code"><button class="copy">Copy</button><pre><code class="lang-sql">-- backticks quote identifiers
+SELECT `userName` FROM `Users`;
+
+-- double quotes often = strings (in default mode)
+SELECT "hello world";   -- a string
+
+-- string LIKE is case-INsensitive by default
+SELECT * FROM users
+WHERE name LIKE 'alice';   -- matches 'Alice'</code></pre></div>
+          </div>
+          <div class="dialect pg">
+            <div class="lbl">PostgreSQL</div>
+            <div class="code"><button class="copy">Copy</button><pre><code class="lang-sql">-- DOUBLE quotes quote identifiers; SINGLE quotes = strings
+SELECT "userName" FROM "Users";   -- exact case preserved
+SELECT 'hello world';             -- a string
+
+-- unquoted identifiers fold to LOWERCASE:
+CREATE TABLE Users (userName text);  -- becomes users(username)
+SELECT userName FROM Users;          -- works (folded to lowercase)
+
+-- LIKE is case-SENSITIVE; use ILIKE for insensitive:
+SELECT * FROM users WHERE name ILIKE 'alice';  -- matches 'Alice'</code></pre></div>
+          </div>
+        </div>
+
+        <div class="callout gotcha">
+          <div class="ico">⚠</div>
+          <div class="ct"><strong>The double-quote trap</strong>If you ever create a table with <code class="inline">CREATE TABLE "Users"</code> (quoted, mixed case), you must <i>always</i> quote it with exact case forever: <code class="inline">SELECT * FROM "Users"</code>. Mismatched case → "relation does not exist". The fix is simple: never quote identifiers, and use <code class="inline">snake_case</code> everywhere. Postgres folds unquoted names to lowercase, so <code class="inline">snake_case</code> sidesteps the whole problem.</div>
+        </div>
+      </div>
+    </section>
+
+    <!-- 5 TYPES -->
+    <section class="module" id="types">
+      <div class="mod-head">
+        <div class="mod-num">05</div>
+        <div><h2>Data types</h2><span class="sub">Mostly familiar, with a few that don't exist and a few that are upgrades.</span></div>
+        <button class="mark-done" data-for="types"><span class="box">✓</span>Mark done</button>
+      </div>
+      <div class="mod-body">
+        <p>Numbers, dates and strings map across cleanly. The surprises are the things MySQL has that Postgres doesn't, and the things Postgres does much better.</p>
+        <ul>
+          <li><b>No <code class="inline">UNSIGNED</code>.</b> Pick a wider type (use <code class="inline">bigint</code>) or add a <code class="inline">CHECK (x &gt;= 0)</code> constraint.</li>
+          <li><b>No <code class="inline">TINYINT</code> / <code class="inline">MEDIUMINT</code>.</b> Use <code class="inline">smallint</code>, <code class="inline">integer</code>, <code class="inline">bigint</code>. For 0/1 flags use a real <code class="inline">boolean</code>.</li>
+          <li><b><code class="inline">boolean</code> is a true type</b>, not an alias for <code class="inline">TINYINT(1)</code>. Accepts <code class="inline">TRUE/FALSE</code>, <code class="inline">'t'/'f'</code>, <code class="inline">1/0</code>.</li>
+          <li><b><code class="inline">text</code> has zero penalty.</b> <code class="inline">varchar(n)</code> is just <code class="inline">text</code> with a length CHECK. Default to <code class="inline">text</code> unless you truly need a length limit. There is no performance difference.</li>
+          <li><b>Real <code class="inline">ENUM</code> types.</b> An enum is a standalone, reusable type — not an inline column definition.</li>
+          <li><b><code class="inline">timestamptz</code></b> stores an instant in UTC and converts to the session timezone. Prefer it over plain <code class="inline">timestamp</code> for anything time-zone aware. MySQL's <code class="inline">DATETIME</code> ≈ <code class="inline">timestamp</code>; its <code class="inline">TIMESTAMP</code> ≈ <code class="inline">timestamptz</code>.</li>
+          <li><b>Native <code class="inline">uuid</code>, <code class="inline">json</code>/<code class="inline">jsonb</code>, arrays, ranges, <code class="inline">inet</code>/<code class="inline">cidr</code></b> — types MySQL either lacks or fakes with strings.</li>
+        </ul>
+
+        <div class="rosetta">
+          <div class="dialect my">
+            <div class="lbl">MySQL<span class="arrow">→</span></div>
+            <div class="code"><button class="copy">Copy</button><pre><code class="lang-sql">CREATE TABLE account (
+  id        INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+  is_active TINYINT(1) DEFAULT 1,
+  role      ENUM('admin','user') NOT NULL,
+  bio       VARCHAR(2000),
+  created   DATETIME DEFAULT CURRENT_TIMESTAMP
+);</code></pre></div>
+          </div>
+          <div class="dialect pg">
+            <div class="lbl">PostgreSQL</div>
+            <div class="code"><button class="copy">Copy</button><pre><code class="lang-sql">CREATE TYPE user_role AS ENUM ('admin','user');  -- reusable type
+
+CREATE TABLE account (
+  id        bigint GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+  is_active boolean DEFAULT true,
+  role      user_role NOT NULL,
+  bio       text,                       -- no length limit needed
+  created   timestamptz DEFAULT now()
+);</code></pre></div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- 6 AUTOINCREMENT -->
+    <section class="module" id="autoincrement">
+      <div class="mod-head">
+        <div class="mod-num">06</div>
+        <div><h2>Auto-increment &amp; sequences</h2><span class="sub">Where did <code class="inline">AUTO_INCREMENT</code> and <code class="inline">LAST_INSERT_ID()</code> go?</span></div>
+        <button class="mark-done" data-for="autoincrement"><span class="box">✓</span>Mark done</button>
+      </div>
+      <div class="mod-body">
+        <p>Postgres has no <code class="inline">AUTO_INCREMENT</code> keyword. Auto-numbering is powered by <b>sequences</b> — independent objects that hand out numbers. Two ways to wire one up:</p>
+        <ul>
+          <li><b><code class="inline">GENERATED ALWAYS AS IDENTITY</code></b> — the modern, SQL-standard way. Prefer this.</li>
+          <li><b><code class="inline">serial</code> / <code class="inline">bigserial</code></b> — the classic shorthand that auto-creates a sequence. Still everywhere in older code.</li>
+        </ul>
+
+        <div class="rosetta">
+          <div class="dialect my">
+            <div class="lbl">MySQL<span class="arrow">→</span></div>
+            <div class="code"><button class="copy">Copy</button><pre><code class="lang-sql">CREATE TABLE post (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  title VARCHAR(200)
+);
+
+INSERT INTO post (title) VALUES ('Hello');
+SELECT LAST_INSERT_ID();   -- get the new id</code></pre></div>
+          </div>
+          <div class="dialect pg">
+            <div class="lbl">PostgreSQL</div>
+            <div class="code"><button class="copy">Copy</button><pre><code class="lang-sql">CREATE TABLE post (
+  id    bigint GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+  title text
+);
+
+-- RETURNING gives you the new row's values in one round-trip:
+INSERT INTO post (title) VALUES ('Hello')
+RETURNING id;              -- way better than LAST_INSERT_ID()</code></pre></div>
+          </div>
+        </div>
+        <div class="callout win">
+          <div class="ico">★</div>
+          <div class="ct"><strong>RETURNING beats LAST_INSERT_ID()</strong>It works on multi-row inserts, on UPDATE and DELETE too, and returns <i>any</i> columns — not just the last id. No second query, no race conditions. See module 08.</div>
+        </div>
+      </div>
+    </section>
+
+    <!-- 7 SYNTAX -->
+    <section class="module" id="syntax">
+      <div class="mod-head">
+        <div class="mod-num">07</div>
+        <div><h2>Syntax that bites</h2><span class="sub">The everyday statements where the dialect diverges.</span></div>
+        <button class="mark-done" data-for="syntax"><span class="box">✓</span>Mark done</button>
+      </div>
+      <div class="mod-body">
+        <p>These are the small differences you'll hit within your first hour of writing real queries.</p>
+
+        <div class="rosetta">
+          <div class="dialect my">
+            <div class="lbl">MySQL<span class="arrow">→</span></div>
+            <div class="code"><button class="copy">Copy</button><pre><code class="lang-sql">-- pagination
+SELECT * FROM t LIMIT 20, 10;    -- offset 20, take 10
+
+-- string concat
+SELECT CONCAT(first, ' ', last);
+
+-- null fallback
+SELECT IFNULL(nickname, 'n/a');
+
+-- date formatting
+SELECT DATE_FORMAT(d, '%Y-%m');
+
+-- regex
+SELECT * FROM t WHERE name REGEXP '^A';
+
+-- current time
+SELECT NOW();</code></pre></div>
+          </div>
+          <div class="dialect pg">
+            <div class="lbl">PostgreSQL</div>
+            <div class="code"><button class="copy">Copy</button><pre><code class="lang-sql">-- pagination (no "20,10" form)
+SELECT * FROM t LIMIT 10 OFFSET 20;
+
+-- string concat: || operator (CONCAT also works)
+SELECT first || ' ' || last;
+
+-- null fallback: standard COALESCE
+SELECT COALESCE(nickname, 'n/a');
+
+-- date formatting: TO_CHAR
+SELECT TO_CHAR(d, 'YYYY-MM');
+
+-- regex: ~ (case-sensitive), ~* (insensitive)
+SELECT * FROM t WHERE name ~ '^A';
+
+-- current time
+SELECT now();</code></pre></div>
+          </div>
+        </div>
+
+        <div class="callout gotcha">
+          <div class="ico">⚠</div>
+          <div class="ct"><strong>GROUP BY is strict</strong>Postgres requires every selected non-aggregated column to appear in <code class="inline">GROUP BY</code> (the SQL standard). MySQL historically let you omit them. If you relied on loose grouping, you'll now get an error — list the columns, or wrap them in an aggregate. (Modern MySQL with <code class="inline">only_full_group_by</code> behaves the same way.)</div>
+        </div>
+        <div class="callout note">
+          <div class="ico">ⓘ</div>
+          <div class="ct"><strong>Also worth knowing</strong>Boolean columns compare with <code class="inline">WHERE is_active</code> (no <code class="inline">= 1</code> needed). <code class="inline">DISTINCT ON (col)</code> grabs the first row per group — a Postgres-only shortcut. Both engines now support CTEs and window functions identically.</div>
+        </div>
+      </div>
+    </section>
+
+    <!-- 8 UPSERT -->
+    <section class="module" id="upsert">
+      <div class="mod-head">
+        <div class="mod-num">08</div>
+        <div><h2>Upserts &amp; RETURNING</h2><span class="sub">Translating <code class="inline">ON DUPLICATE KEY UPDATE</code> and <code class="inline">REPLACE INTO</code>.</span></div>
+        <button class="mark-done" data-for="upsert"><span class="box">✓</span>Mark done</button>
+      </div>
+      <div class="mod-body">
+        <p>Postgres spells "insert, or update if it already exists" as <b><code class="inline">INSERT … ON CONFLICT</code></b>. It's more explicit than MySQL's version — you name the conflicting column(s), and reference the would-be-inserted row via the special <code class="inline">EXCLUDED</code> table.</p>
+
+        <div class="rosetta">
+          <div class="dialect my">
+            <div class="lbl">MySQL<span class="arrow">→</span></div>
+            <div class="code"><button class="copy">Copy</button><pre><code class="lang-sql">INSERT INTO inventory (sku, qty)
+VALUES ('A1', 5)
+ON DUPLICATE KEY UPDATE
+  qty = qty + VALUES(qty);
+
+-- REPLACE: delete + re-insert
+REPLACE INTO inventory (sku, qty)
+VALUES ('A1', 5);</code></pre></div>
+          </div>
+          <div class="dialect pg">
+            <div class="lbl">PostgreSQL</div>
+            <div class="code"><button class="copy">Copy</button><pre><code class="lang-sql">INSERT INTO inventory (sku, qty)
+VALUES ('A1', 5)
+ON CONFLICT (sku) DO UPDATE
+  SET qty = inventory.qty + EXCLUDED.qty
+RETURNING sku, qty;        -- see the result, optionally
+
+-- "insert, ignore if exists":
+INSERT INTO inventory (sku, qty)
+VALUES ('A1', 5)
+ON CONFLICT (sku) DO NOTHING;</code></pre></div>
+          </div>
+        </div>
+        <div class="callout note">
+          <div class="ico">ⓘ</div>
+          <div class="ct"><strong>EXCLUDED = the rejected row</strong>Inside <code class="inline">DO UPDATE</code>, <code class="inline">EXCLUDED.qty</code> is the value you tried to insert, and the bare column / <code class="inline">tablename.qty</code> is the existing row. There's no direct <code class="inline">REPLACE INTO</code> equivalent — and you rarely want one, since <code class="inline">ON CONFLICT</code> updates in place instead of delete-then-insert (which would reset sequences and fire triggers).</div>
+        </div>
+      </div>
+    </section>
+
+    <!-- 9 JSONB -->
+    <section class="module" id="jsonb">
+      <div class="mod-head">
+        <div class="mod-num">09</div>
+        <div><h2>JSONB &amp; arrays</h2><span class="sub">One of the biggest reasons teams move to Postgres.</span></div>
+        <button class="mark-done" data-for="jsonb"><span class="box">✓</span>Mark done</button>
+      </div>
+      <div class="mod-body">
+        <p>MySQL has a <code class="inline">JSON</code> type, but Postgres' <b><code class="inline">jsonb</code></b> is a different league: binary-stored, indexable with GIN, and packed with operators and containment querying. There are also true <b>arrays</b> as a column type.</p>
+
+        <div class="codeblock"><button class="copy">Copy</button>
+          <div class="cb-lbl">PostgreSQL · JSONB</div>
+          <pre><code class="lang-sql">CREATE TABLE event (id bigint GENERATED ALWAYS AS IDENTITY, data jsonb);
+
+INSERT INTO event (data) VALUES
+  ('{"type":"click","user":{"id":7,"plan":"pro"},"tags":["a","b"]}');
+
+-- ->  returns jsonb   |   ->> returns text
+SELECT data->'user'->>'plan'        AS plan,     -- 'pro'
+       data->'user'->>'id'          AS user_id,  -- '7'
+       data #>> '{user,id}'         AS deep       -- path access
+FROM event;
+
+-- @> containment: "does data contain this shape?" (GIN-indexable)
+SELECT * FROM event WHERE data @> '{"type":"click"}';
+
+-- ? key-exists; build/modify with jsonb_set, jsonb_build_object
+SELECT * FROM event WHERE data->'user' ? 'plan';
+
+-- index every key/value for fast containment queries:
+CREATE INDEX idx_event_data ON event USING GIN (data);</code></pre></div>
+
+        <div class="codeblock"><button class="copy">Copy</button>
+          <div class="cb-lbl">PostgreSQL · native arrays</div>
+          <pre><code class="lang-sql">CREATE TABLE article (id int, tags text[]);
+INSERT INTO article VALUES (1, ARRAY['sql','postgres','db']);
+
+SELECT * FROM article WHERE 'postgres' = ANY(tags);  -- membership
+SELECT * FROM article WHERE tags @> ARRAY['sql'];     -- contains
+SELECT id, unnest(tags) AS tag FROM article;          -- explode to rows</code></pre></div>
+
+        <div class="callout win">
+          <div class="ico">★</div>
+          <div class="ct"><strong>Default to jsonb, not json</strong>Use <code class="inline">jsonb</code> unless you specifically need to preserve key order and whitespace exactly. Only <code class="inline">jsonb</code> supports indexing and the rich operators above.</div>
+        </div>
+      </div>
+    </section>
+
+    <!-- 10 INDEXES -->
+    <section class="module" id="indexes">
+      <div class="mod-head">
+        <div class="mod-num">10</div>
+        <div><h2>Indexes &amp; full-text search</h2><span class="sub">More index types, no <code class="inline">FULLTEXT</code> keyword.</span></div>
+        <button class="mark-done" data-for="indexes"><span class="box">✓</span>Mark done</button>
+      </div>
+      <div class="mod-body">
+        <p>B-tree is still the default and covers most needs. Beyond it, Postgres offers specialised index methods you reach for deliberately: <b>GIN</b> (jsonb, arrays, full-text), <b>GiST</b> (geometry, ranges), <b>BRIN</b> (huge append-only tables), and <b>Hash</b>.</p>
+        <ul>
+          <li><b>Partial indexes</b> — index only the rows you query: <code class="inline">CREATE INDEX … WHERE archived = false;</code></li>
+          <li><b>Expression indexes</b> — index a computed value: <code class="inline">CREATE INDEX … ON users (lower(email));</code></li>
+          <li><b><code class="inline">CREATE INDEX CONCURRENTLY</code></b> — build without locking writes (essential in production).</li>
+        </ul>
+
+        <div class="rosetta">
+          <div class="dialect my">
+            <div class="lbl">MySQL<span class="arrow">→</span></div>
+            <div class="code"><button class="copy">Copy</button><pre><code class="lang-sql">-- full-text in MySQL
+ALTER TABLE doc
+  ADD FULLTEXT(body);
+
+SELECT * FROM doc
+WHERE MATCH(body)
+AGAINST('postgres tips');</code></pre></div>
+          </div>
+          <div class="dialect pg">
+            <div class="lbl">PostgreSQL</div>
+            <div class="code"><button class="copy">Copy</button><pre><code class="lang-sql">-- full-text via tsvector / tsquery + GIN
+CREATE INDEX idx_doc_fts ON doc
+  USING GIN (to_tsvector('english', body));
+
+SELECT * FROM doc
+WHERE to_tsvector('english', body)
+   @@ websearch_to_tsquery('english', 'postgres tips');</code></pre></div>
+          </div>
+        </div>
+        <div class="callout note">
+          <div class="ico">ⓘ</div>
+          <div class="ct"><strong>Fuzzy / typo search</strong>For "LIKE %term%" or typo-tolerant matching, enable the <code class="inline">pg_trgm</code> extension and add a GIN trigram index — it makes leading-wildcard <code class="inline">ILIKE</code> queries fast, which MySQL can't index at all.</div>
+        </div>
+      </div>
+    </section>
+
+    <!-- 11 FUNCTIONS -->
+    <section class="module" id="functions">
+      <div class="mod-head">
+        <div class="mod-num">11</div>
+        <div><h2>Functions &amp; PL/pgSQL</h2><span class="sub">Stored logic, dollar-quoting, and the <code class="inline">DO</code> block.</span></div>
+        <button class="mark-done" data-for="functions"><span class="box">✓</span>Mark done</button>
+      </div>
+      <div class="mod-body">
+        <p>Postgres leans on <b>functions</b> (which return values and can be used in queries) more than on procedures. The default procedural language is <b>PL/pgSQL</b>. The signature quirk is <b>dollar-quoting</b> (<code class="inline">$$ … $$</code>), which frees you from escaping quotes inside the body and removes the need for MySQL's <code class="inline">DELIMITER</code> dance.</p>
+
+        <div class="rosetta">
+          <div class="dialect my">
+            <div class="lbl">MySQL<span class="arrow">→</span></div>
+            <div class="code"><button class="copy">Copy</button><pre><code class="lang-sql">DELIMITER //
+CREATE FUNCTION add_tax(p DECIMAL(10,2))
+RETURNS DECIMAL(10,2)
+DETERMINISTIC
+BEGIN
+  RETURN p * 1.2;
+END //
+DELIMITER ;</code></pre></div>
+          </div>
+          <div class="dialect pg">
+            <div class="lbl">PostgreSQL</div>
+            <div class="code"><button class="copy">Copy</button><pre><code class="lang-sql">CREATE FUNCTION add_tax(p numeric)
+RETURNS numeric
+LANGUAGE plpgsql AS $$
+BEGIN
+  RETURN p * 1.2;
+END;
+$$;
+
+-- call it like any built-in:
+SELECT add_tax(100);   -- 120.0
+
+-- one-off anonymous block (no function needed):
+DO $$ BEGIN RAISE NOTICE 'hi from a DO block'; END $$;</code></pre></div>
+          </div>
+        </div>
+        <div class="callout note">
+          <div class="ico">ⓘ</div>
+          <div class="ct"><strong>Triggers split into two pieces</strong>You write a trigger <i>function</i> returning <code class="inline">trigger</code>, then attach it with <code class="inline">CREATE TRIGGER … EXECUTE FUNCTION fn()</code>. Inside, <code class="inline">NEW</code> and <code class="inline">OLD</code> work just like MySQL.</div>
+        </div>
+      </div>
+    </section>
+
+    <!-- 12 TRANSACTIONS -->
+    <section class="module" id="transactions">
+      <div class="mod-head">
+        <div class="mod-num">12</div>
+        <div><h2>Transactions, MVCC &amp; VACUUM</h2><span class="sub">Two superpowers and one chore you must understand.</span></div>
+        <button class="mark-done" data-for="transactions"><span class="box">✓</span>Mark done</button>
+      </div>
+      <div class="mod-body">
+        <ul>
+          <li><b>Transactional DDL (superpower).</b> Schema changes can live inside a transaction and be rolled back. Migrations that fail halfway leave nothing behind.</li>
+          <li><b>MVCC always-on (superpower).</b> Readers never block writers and writers never block readers. An <code class="inline">UPDATE</code> writes a new row version rather than locking the old one.</li>
+          <li><b>VACUUM (the chore).</b> Because updates/deletes leave "dead" row versions, Postgres reclaims them with <code class="inline">VACUUM</code>. <b><code class="inline">autovacuum</code></b> handles this automatically in the background — you mostly just need to know it exists and not disable it.</li>
+        </ul>
+
+        <div class="codeblock"><button class="copy">Copy</button>
+          <div class="cb-lbl">PostgreSQL</div>
+          <pre><code class="lang-sql">BEGIN;
+  ALTER TABLE orders ADD COLUMN refunded boolean DEFAULT false;
+  UPDATE orders SET refunded = true WHERE status = 'returned';
+  -- changed your mind? this undoes the ALTER too:
+ROLLBACK;     -- or COMMIT;
+
+-- inspect a query plan with real timings:
+EXPLAIN (ANALYZE, BUFFERS)
+SELECT * FROM orders WHERE customer_id = 42;
+
+-- refresh planner statistics after big data changes:
+ANALYZE orders;</code></pre></div>
+
+        <div class="callout win">
+          <div class="ico">★</div>
+          <div class="ct"><strong>Row locking when you need it</strong><code class="inline">SELECT … FOR UPDATE</code> locks selected rows for the rest of the transaction (job queues, balance updates). Add <code class="inline">SKIP LOCKED</code> to build a contention-free worker queue — a pattern that's clean and reliable in Postgres.</div>
+        </div>
+      </div>
+    </section>
+
+    <!-- CHEAT SHEET -->
+    <section class="module" id="cheatsheet">
+      <div class="mod-head">
+        <div class="mod-num">13</div>
+        <div><h2>Searchable cheat sheet</h2><span class="sub">The whole guide, compressed. Type to filter.</span></div>
+        <button class="mark-done" data-for="cheatsheet"><span class="box">✓</span>Mark done</button>
+      </div>
+      <div class="mod-body">
+        <div class="cheat-search">
+          <span class="ic">⌕</span>
+          <input type="text" id="cheatInput" placeholder="filter… try 'auto', 'json', 'limit', 'concat'" aria-label="Filter cheat sheet">
+        </div>
+        <div class="tbl-wrap">
+          <table id="cheatTable">
+            <thead><tr><th>Task</th><th>MySQL</th><th>PostgreSQL</th></tr></thead>
+            <tbody>
+              <tr><td>List databases</td><td class="my"><code>SHOW DATABASES;</code></td><td class="pg"><code>\l</code></td></tr>
+              <tr><td>Switch database</td><td class="my"><code>USE shop;</code></td><td class="pg"><code>\c shop</code> (reconnects)</td></tr>
+              <tr><td>List tables</td><td class="my"><code>SHOW TABLES;</code></td><td class="pg"><code>\dt</code></td></tr>
+              <tr><td>Describe table</td><td class="my"><code>DESCRIBE orders;</code></td><td class="pg"><code>\d orders</code></td></tr>
+              <tr><td>Vertical row output</td><td class="my"><code>SELECT … \G</code></td><td class="pg"><code>\x</code> then run query</td></tr>
+              <tr><td>Default port</td><td class="my"><code>3306</code></td><td class="pg"><code>5432</code></td></tr>
+              <tr><td>Auto-increment column</td><td class="my"><code>INT AUTO_INCREMENT</code></td><td class="pg"><code>bigint GENERATED ALWAYS AS IDENTITY</code></td></tr>
+              <tr><td>Get last inserted id</td><td class="my"><code>LAST_INSERT_ID()</code></td><td class="pg"><code>INSERT … RETURNING id</code></td></tr>
+              <tr><td>Quote an identifier</td><td class="my"><code>`col`</code> (backticks)</td><td class="pg"><code>"col"</code> (double quotes)</td></tr>
+              <tr><td>Unsigned integer</td><td class="my"><code>INT UNSIGNED</code></td><td class="pg"><code>bigint</code> + <code>CHECK (x &gt;= 0)</code></td></tr>
+              <tr><td>Tiny boolean flag</td><td class="my"><code>TINYINT(1)</code></td><td class="pg"><code>boolean</code></td></tr>
+              <tr><td>Unlimited text</td><td class="my"><code>TEXT</code> / <code>LONGTEXT</code></td><td class="pg"><code>text</code> (no penalty)</td></tr>
+              <tr><td>Pagination</td><td class="my"><code>LIMIT 20, 10</code></td><td class="pg"><code>LIMIT 10 OFFSET 20</code></td></tr>
+              <tr><td>String concatenation</td><td class="my"><code>CONCAT(a, b)</code></td><td class="pg"><code>a || b</code></td></tr>
+              <tr><td>Null fallback</td><td class="my"><code>IFNULL(x, y)</code></td><td class="pg"><code>COALESCE(x, y)</code></td></tr>
+              <tr><td>Case-insensitive match</td><td class="my"><code>LIKE</code> (default)</td><td class="pg"><code>ILIKE</code></td></tr>
+              <tr><td>Regular expression</td><td class="my"><code>REGEXP</code> / <code>RLIKE</code></td><td class="pg"><code>~</code> and <code>~*</code></td></tr>
+              <tr><td>Format a date</td><td class="my"><code>DATE_FORMAT(d, '%Y')</code></td><td class="pg"><code>TO_CHAR(d, 'YYYY')</code></td></tr>
+              <tr><td>Upsert</td><td class="my"><code>ON DUPLICATE KEY UPDATE</code></td><td class="pg"><code>ON CONFLICT (col) DO UPDATE</code></td></tr>
+              <tr><td>Insert-or-ignore</td><td class="my"><code>INSERT IGNORE</code></td><td class="pg"><code>ON CONFLICT DO NOTHING</code></td></tr>
+              <tr><td>JSON field access</td><td class="my"><code>data-&gt;&gt;'$.k'</code></td><td class="pg"><code>data-&gt;&gt;'k'</code> · <code>jsonb</code> type</td></tr>
+              <tr><td>Full-text search</td><td class="my"><code>MATCH … AGAINST</code></td><td class="pg"><code>to_tsvector @@ to_tsquery</code></td></tr>
+              <tr><td>Stored function delimiter</td><td class="my"><code>DELIMITER //</code></td><td class="pg"><code>$$ … $$</code> dollar-quoting</td></tr>
+              <tr><td>Dump / restore</td><td class="my"><code>mysqldump</code></td><td class="pg"><code>pg_dump</code> / <code>pg_restore</code></td></tr>
+              <tr><td>Current timestamp</td><td class="my"><code>NOW()</code></td><td class="pg"><code>now()</code> (same)</td></tr>
+            </tbody>
+          </table>
+          <div class="no-res" id="noRes">No matching rows — try a shorter term.</div>
+        </div>
+      </div>
+    </section>
+
+    <!-- QUIZ -->
+    <section class="module" id="quiz">
+      <div class="mod-head">
+        <div class="mod-num">✓</div>
+        <div><h2>Self-check quiz</h2><span class="sub">Five questions to confirm the dialect stuck. Pick an answer to reveal the why.</span></div>
+      </div>
+      <div class="mod-body" id="quizMount"></div>
+    </section>
+
+    <!-- NEXT -->
+    <section class="module" id="next" style="border-bottom:0">
+      <div class="mod-head">
+        <div class="mod-num">→</div>
+        <div><h2>Where to go next</h2><span class="sub">You're fluent in the dialect. Now go deep on the parts that matter to you.</span></div>
+      </div>
+      <div class="mod-body footer">
+        <p>The fastest way to cement this is to migrate one small real schema and run your actual queries. When something errors, it'll almost always map back to a module above.</p>
+        <div class="res-grid">
+          <a class="res" href="https://www.postgresql.org/docs/current/" target="_blank" rel="noopener"><div class="rt">Official Documentation ↗</div><div class="rd">Famously thorough and readable. Start with the Tutorial, keep the SQL Commands reference open.</div></a>
+          <a class="res" href="https://www.postgresql.org/docs/current/plpgsql.html" target="_blank" rel="noopener"><div class="rt">PL/pgSQL Guide ↗</div><div class="rd">When you're ready to write real functions and triggers.</div></a>
+          <a class="res" href="https://www.postgresql.org/docs/current/datatype-json.html" target="_blank" rel="noopener"><div class="rt">JSON Types &amp; Functions ↗</div><div class="rd">The full operator and function set behind module 09.</div></a>
+          <a class="res" href="https://www.postgresql.org/docs/current/using-explain.html" target="_blank" rel="noopener"><div class="rt">Understanding EXPLAIN ↗</div><div class="rd">Read query plans, find missing indexes, tune for real.</div></a>
+        </div>
+        <p style="margin-top:30px">A practical first project: spin up Postgres locally (<code class="inline">docker run -e POSTGRES_PASSWORD=pw -p 5432:5432 postgres</code>), import a CSV with <code class="inline">\copy</code>, and rewrite three queries from a current MySQL project. You'll hit four or five modules above in one sitting — that's when it clicks.</p>
+        <p class="end-note">Built as a single self-contained file · amber = MySQL · blue = PostgreSQL · progress is tracked for this session</p>
+      </div>
+    </section>
+  </main>
+</div>
+
+<script>
+/* ---------- SQL syntax highlighter (lightweight, string/comment-safe) ---------- */
+(function highlight(){
+  const KW = new Set(("select insert update delete from where group by order having limit offset on conflict do nothing set values into create table type as enum index using gin gist brin btree alter add column primary key foreign references default not null unique check begin commit rollback returning distinct join inner left right outer union all and or in is exists case when then else end with recursive generated always identity language function returns trigger declare raise notice analyze explain vacuum grant revoke role schema show use describe match against concat ifnull coalesce now to_char unnest any websearch_to_tsquery to_tsvector deterministic replace ignore").split(" "));
+  function esc(s){return s.replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;");}
+  document.querySelectorAll("pre code").forEach(code=>{
+    const src = code.textContent;
+    let out="", i=0;
+    while(i<src.length){
+      const c=src[i];
+      // line comment --
+      if(c==="-"&&src[i+1]==="-"){let j=src.indexOf("\n",i);if(j<0)j=src.length;out+='<span class="t-com">'+esc(src.slice(i,j))+'</span>';i=j;continue;}
+      // string '...'
+      if(c==="'"){let j=i+1;while(j<src.length){if(src[j]==="'"&&src[j+1]==="'"){j+=2;continue;}if(src[j]==="'"){j++;break;}j++;}out+='<span class="t-str">'+esc(src.slice(i,j))+'</span>';i=j;continue;}
+      // dollar quote $$
+      if(c==="$"&&src[i+1]==="$"){out+='<span class="t-meta">$$</span>';i+=2;continue;}
+      // psql meta \x
+      if(c==="\\"&&/[a-z+]/i.test(src[i+1]||"")){let j=i+1;while(j<src.length&&/[a-z+]/i.test(src[j]))j++;out+='<span class="t-meta">'+esc(src.slice(i,j))+'</span>';i=j;continue;}
+      // number
+      if(/[0-9]/.test(c)&&!/[A-Za-z_]/.test(src[i-1]||"")){let j=i;while(j<src.length&&/[0-9.]/.test(src[j]))j++;out+='<span class="t-num">'+esc(src.slice(i,j))+'</span>';i=j;continue;}
+      // word
+      if(/[A-Za-z_]/.test(c)){let j=i;while(j<src.length&&/[A-Za-z0-9_]/.test(src[j]))j++;const w=src.slice(i,j);const isFn=src[j]==="(";if(KW.has(w.toLowerCase()))out+='<span class="t-key">'+esc(w)+'</span>';else if(isFn)out+='<span class="t-fn">'+esc(w)+'</span>';else out+=esc(w);i=j;continue;}
+      out+=esc(c);i++;
+    }
+    code.innerHTML=out;
+  });
+})();
+
+/* ---------- Copy buttons ---------- */
+document.querySelectorAll(".copy").forEach(btn=>{
+  btn.addEventListener("click",()=>{
+    const pre=btn.parentElement.querySelector("pre")||btn.closest(".codeblock,.dialect").querySelector("pre");
+    const text=pre.innerText;
+    navigator.clipboard.writeText(text).then(()=>{
+      btn.textContent="Copied";btn.classList.add("copied");
+      setTimeout(()=>{btn.textContent="Copy";btn.classList.remove("copied");},1400);
+    }).catch(()=>{btn.textContent="⌘C";});
+  });
+});
+
+/* ---------- Progress tracking (in-memory for the session) ---------- */
+const MODS = ["mindset","tooling","schemas","identifiers","types","autoincrement","syntax","upsert","jsonb","indexes","functions","transactions","cheatsheet"];
+const done = new Set();
+const progFill=document.getElementById("progFill"), progTxt=document.getElementById("progTxt");
+function refreshProgress(){
+  progFill.style.width=(done.size/MODS.length*100)+"%";
+  progTxt.textContent=done.size+" / "+MODS.length;
+  document.querySelectorAll('.nav a[data-mod]').forEach(a=>{
+    const id=a.getAttribute("href").slice(1);
+    a.classList.toggle("done",done.has(id));
+  });
+}
+document.querySelectorAll(".mark-done").forEach(btn=>{
+  btn.addEventListener("click",()=>{
+    const id=btn.dataset.for;
+    if(done.has(id)){done.delete(id);btn.classList.remove("on");btn.lastChild.textContent="Mark done";}
+    else{done.add(id);btn.classList.add("on");btn.lastChild.textContent="Done";}
+    refreshProgress();
+  });
+});
+
+/* ---------- Scroll-spy ---------- */
+const navLinks=[...document.querySelectorAll(".nav a")];
+const spy=new IntersectionObserver(entries=>{
+  entries.forEach(e=>{
+    if(e.isIntersecting){
+      const id=e.target.id;
+      navLinks.forEach(l=>l.classList.toggle("active",l.getAttribute("href")==="#"+id));
+    }
+  });
+},{rootMargin:"-40% 0px -55% 0px"});
+document.querySelectorAll("section.module").forEach(s=>spy.observe(s));
+
+/* ---------- Cheat sheet filter ---------- */
+const cheatInput=document.getElementById("cheatInput");
+const rows=[...document.querySelectorAll("#cheatTable tbody tr")];
+const noRes=document.getElementById("noRes");
+cheatInput.addEventListener("input",()=>{
+  const q=cheatInput.value.toLowerCase().trim();
+  let shown=0;
+  rows.forEach(r=>{const hit=r.textContent.toLowerCase().includes(q);r.style.display=hit?"":"none";if(hit)shown++;});
+  noRes.style.display=shown?"none":"block";
+});
+
+/* ---------- Quiz ---------- */
+const QUIZ=[
+  {q:"You run <code class='inline'>SELECT * FROM Users</code> but get \"relation does not exist\" — even though you just created the table. Most likely cause?",
+   opts:["Postgres is case-sensitive for table names by default","The table was created with quoted mixed-case (\"Users\") so it must be quoted exactly","You forgot a semicolon","Postgres needs SHOW TABLES first"],
+   a:1,exp:"Unquoted identifiers fold to lowercase. If you created \"Users\" with quotes, the real name is mixed-case and must always be quoted. Fix: use unquoted snake_case names everywhere."},
+  {q:"What replaces MySQL's <code class='inline'>LAST_INSERT_ID()</code> in idiomatic Postgres?",
+   opts:["SELECT @@identity","currval() — always","Add RETURNING id to the INSERT","SELECT LAST_INSERT_ID()"],
+   a:2,exp:"RETURNING works on INSERT/UPDATE/DELETE, on multi-row statements, returns any columns, and needs no second query or sequence lookup."},
+  {q:"You need \"insert, or update the row if the key already exists.\" The Postgres syntax is:",
+   opts:["ON DUPLICATE KEY UPDATE","REPLACE INTO","INSERT … ON CONFLICT (col) DO UPDATE","MERGE ONLY"],
+   a:2,exp:"ON CONFLICT names the conflicting column(s) and references the attempted row via the special EXCLUDED table."},
+  {q:"Which statement about DDL is true in PostgreSQL but NOT in MySQL?",
+   opts:["CREATE TABLE can be rolled back inside a transaction","Tables can have a primary key","You can add columns with ALTER TABLE","Indexes speed up queries"],
+   a:0,exp:"Postgres DDL is transactional — wrap schema changes in BEGIN…ROLLBACK to undo them. MySQL issues an implicit commit on DDL."},
+  {q:"For a flexible, indexable document column, you should choose:",
+   opts:["TEXT and parse it yourself","json (not jsonb)","jsonb with a GIN index","BLOB"],
+   a:2,exp:"jsonb is binary-stored, supports containment operators like @>, and can be indexed with GIN — the main reason teams reach for Postgres over MySQL JSON."}
+];
+const mount=document.getElementById("quizMount");
+QUIZ.forEach((item,qi)=>{
+  const card=document.createElement("div");card.className="quiz-card";
+  const opts=item.opts.map((o,oi)=>`<button class="opt" data-q="${qi}" data-o="${oi}">${o}</button>`).join("");
+  card.innerHTML=`<div class="quiz-q"><span class="qn">Q${qi+1}</span><span>${item.q}</span></div>${opts}<div class="quiz-exp" id="exp-${qi}"></div>`;
+  mount.appendChild(card);
+});
+mount.addEventListener("click",e=>{
+  const b=e.target.closest(".opt");if(!b)return;
+  const qi=+b.dataset.q, oi=+b.dataset.o, item=QUIZ[qi];
+  const card=b.closest(".quiz-card");
+  if(card.dataset.answered)return;
+  card.dataset.answered="1";
+  card.querySelectorAll(".opt").forEach((opt,idx)=>{
+    opt.disabled=true;
+    if(idx===item.a)opt.classList.add("correct");
+    else if(idx===oi)opt.classList.add("wrong");
+  });
+  const exp=document.getElementById("exp-"+qi);
+  exp.innerHTML=(oi===item.a?"✓ Correct. ":"→ ")+item.exp;
+  exp.classList.add("show");
+});
+
+/* ---------- Mobile nav ---------- */
+const sidebar=document.getElementById("sidebar"),scrim=document.getElementById("scrim"),menuBtn=document.getElementById("menuBtn");
+function toggleNav(open){sidebar.classList.toggle("open",open);scrim.classList.toggle("show",open);}
+menuBtn.addEventListener("click",()=>toggleNav(!sidebar.classList.contains("open")));
+scrim.addEventListener("click",()=>toggleNav(false));
+document.querySelectorAll('.nav a[href^="#"]').forEach(a=>a.addEventListener("click",e=>{
+  e.preventDefault();
+  const target=document.getElementById(a.getAttribute("href").slice(1));
+  if(target)target.scrollIntoView({behavior:"smooth",block:"start"});
+  if(window.innerWidth<=980)toggleNav(false);
+}));
+
+refreshProgress();
+</script>
+</body>
+</html>
