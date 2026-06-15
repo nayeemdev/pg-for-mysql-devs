@@ -25,13 +25,6 @@ Just open `index.html` in a browser, or serve it:
 npx serve .
 ```
 
-## Deploying to Vercel
-
-1. Push this repo to GitHub
-2. Go to [vercel.com/new](https://vercel.com/new) and import the repo
-3. Leave all settings as default (no build command, no framework preset) and deploy
-
-Vercel will serve `index.html` automatically as the static site root.
 
 ## Contributing
 
