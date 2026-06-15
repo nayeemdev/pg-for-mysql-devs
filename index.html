@@ -3,7 +3,14 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="description" content="An interactive field guide to PostgreSQL for developers who already know MySQL. Side-by-side syntax translations, gotchas, a searchable cheat sheet, and a self-check quiz.">
+<meta name="color-scheme" content="dark">
+<meta property="og:title" content="PostgreSQL for MySQL Developers — A Field Guide">
+<meta property="og:description" content="Skip the basics. Learn the dialect differences, gotchas, and upgrades — side by side with the MySQL you already know.">
+<meta property="og:type" content="website">
+<meta name="twitter:card" content="summary">
 <title>PostgreSQL for MySQL Developers — A Field Guide</title>
+<link rel="icon" href="data:image/svg+xml,&lt;svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22&gt;&lt;rect width=%22100%22 height=%22100%22 rx=%2222%22 fill=%22%23336791%22/&gt;&lt;text x=%2250%22 y=%2266%22 font-size=%2256%22 text-anchor=%22middle%22 fill=%22white%22 font-family=%22sans-serif%22&gt;⌖&lt;/text&gt;&lt;/svg&gt;">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
@@ -73,6 +80,11 @@
   .progress-meta{display:flex;justify-content:space-between;font-size:12px;color:var(--muted);margin-bottom:7px;font-family:var(--mono)}
   .progress-track{height:6px;border-radius:6px;background:var(--line-soft);overflow:hidden}
   .progress-fill{height:100%;width:0;border-radius:6px;background:linear-gradient(90deg,var(--pg-deep),var(--pg));transition:width .5s cubic-bezier(.2,.8,.2,1)}
+  .reset-progress{
+    margin-top:10px;background:none;border:0;padding:0;font-family:var(--mono);font-size:11px;
+    color:var(--muted-2);letter-spacing:.4px;cursor:pointer;text-decoration:underline;text-decoration-color:transparent;transition:.15s;
+  }
+  .reset-progress:hover{color:var(--warn);text-decoration-color:var(--warn)}
 
   .nav{list-style:none;margin:0;padding:0}
   .nav .grp{font-family:var(--mono);font-size:10.5px;letter-spacing:1.4px;text-transform:uppercase;color:var(--muted-2);margin:18px 10px 8px}
@@ -256,6 +268,7 @@
     <div class="progress-wrap">
       <div class="progress-meta"><span>Progress</span><span id="progTxt">0 / 13</span></div>
       <div class="progress-track"><div class="progress-fill" id="progFill"></div></div>
+      <button class="reset-progress" id="resetProgress" type="button">Reset progress</button>
     </div>
 
     <nav>
@@ -288,7 +301,7 @@
     <!-- HERO -->
     <header class="hero">
       <div class="eyebrow"><span class="pulse"></span>Field guide · zero to fluent</div>
-      <h1 class="hero-title">You already know <span class="pct">90%</span> of <em>PostgreSQL</em>, from MySQL</h1>
+      <h1 class="hero-title">You already know <span class="pct">90%</span> of <em>PostgreSQL</em>.</h1>
       <p class="hero-sub">SQL is SQL. <b>SELECT</b>, <b>JOIN</b>, <b>GROUP BY</b>, indexes, transactions — you carry all of that across untouched. This guide skips the basics and teaches the other 10%: the dialect quirks, the gotchas that'll trip you on day one, and the genuinely better tools waiting on the other side. Think of it as a phrasebook for a language you almost already speak.</p>
 
       <div class="legend">
@@ -898,7 +911,7 @@ ANALYZE orders;</code></pre></div>
           <a class="res" href="https://www.postgresql.org/docs/current/using-explain.html" target="_blank" rel="noopener"><div class="rt">Understanding EXPLAIN ↗</div><div class="rd">Read query plans, find missing indexes, tune for real.</div></a>
         </div>
         <p style="margin-top:30px">A practical first project: spin up Postgres locally (<code class="inline">docker run -e POSTGRES_PASSWORD=pw -p 5432:5432 postgres</code>), import a CSV with <code class="inline">\copy</code>, and rewrite three queries from a current MySQL project. You'll hit four or five modules above in one sitting — that's when it clicks.</p>
-        <p class="end-note">Built as a single self-contained file · amber = MySQL · blue = PostgreSQL · progress is tracked for this session</p>
+        <p class="end-note">Built as a single self-contained file · amber = MySQL · blue = PostgreSQL · your progress is saved in this browser only (<a href="#" id="footerReset">reset</a>) · <a href="https://github.com/nayeemdev/pg-for-mysql-devs" target="_blank" rel="noopener">source on GitHub</a></p>
       </div>
     </section>
   </main>
@@ -944,10 +957,26 @@ document.querySelectorAll(".copy").forEach(btn=>{
   });
 });
 
-/* ---------- Progress tracking (in-memory for the session) ---------- */
+/* ---------- Progress tracking (persisted per-browser via localStorage) ---------- */
+const STORAGE_KEY = "pg-for-mysql-devs:progress:v1";
 const MODS = ["mindset","tooling","schemas","identifiers","types","autoincrement","syntax","upsert","jsonb","indexes","functions","transactions","cheatsheet"];
-const done = new Set();
+
+function loadProgress(){
+  try{
+    const raw = localStorage.getItem(STORAGE_KEY);
+    if(!raw) return new Set();
+    const arr = JSON.parse(raw);
+    return new Set(Array.isArray(arr) ? arr.filter(id => MODS.includes(id)) : []);
+  }catch(e){ return new Set(); }
+}
+function saveProgress(){
+  try{ localStorage.setItem(STORAGE_KEY, JSON.stringify([...done])); }
+  catch(e){ /* storage unavailable (private mode etc.) — fail silently */ }
+}
+
+const done = loadProgress();
 const progFill=document.getElementById("progFill"), progTxt=document.getElementById("progTxt");
+
 function refreshProgress(){
   progFill.style.width=(done.size/MODS.length*100)+"%";
   progTxt.textContent=done.size+" / "+MODS.length;
@@ -957,10 +986,12 @@ function refreshProgress(){
   });
 }
 document.querySelectorAll(".mark-done").forEach(btn=>{
+  const id=btn.dataset.for;
+  if(done.has(id)){btn.classList.add("on");btn.lastChild.textContent="Done";}
   btn.addEventListener("click",()=>{
-    const id=btn.dataset.for;
     if(done.has(id)){done.delete(id);btn.classList.remove("on");btn.lastChild.textContent="Mark done";}
     else{done.add(id);btn.classList.add("on");btn.lastChild.textContent="Done";}
+    saveProgress();
     refreshProgress();
   });
 });
@@ -1007,12 +1038,17 @@ const QUIZ=[
    a:2,exp:"jsonb is binary-stored, supports containment operators like @>, and can be indexed with GIN — the main reason teams reach for Postgres over MySQL JSON."}
 ];
 const mount=document.getElementById("quizMount");
-QUIZ.forEach((item,qi)=>{
-  const card=document.createElement("div");card.className="quiz-card";
-  const opts=item.opts.map((o,oi)=>`<button class="opt" data-q="${qi}" data-o="${oi}">${o}</button>`).join("");
-  card.innerHTML=`<div class="quiz-q"><span class="qn">Q${qi+1}</span><span>${item.q}</span></div>${opts}<div class="quiz-exp" id="exp-${qi}"></div>`;
-  mount.appendChild(card);
-});
+function renderQuiz(){
+  mount.innerHTML="";
+  QUIZ.forEach((item,qi)=>{
+    const card=document.createElement("div");card.className="quiz-card";
+    const opts=item.opts.map((o,oi)=>`<button class="opt" data-q="${qi}" data-o="${oi}">${o}</button>`).join("");
+    card.innerHTML=`<div class="quiz-q"><span class="qn">Q${qi+1}</span><span>${item.q}</span></div>${opts}<div class="quiz-exp" id="exp-${qi}"></div>`;
+    mount.appendChild(card);
+  });
+}
+function resetQuiz(){ renderQuiz(); }
+renderQuiz();
 mount.addEventListener("click",e=>{
   const b=e.target.closest(".opt");if(!b)return;
   const qi=+b.dataset.q, oi=+b.dataset.o, item=QUIZ[qi];
@@ -1040,6 +1076,20 @@ document.querySelectorAll('.nav a[href^="#"]').forEach(a=>a.addEventListener("cl
   if(target)target.scrollIntoView({behavior:"smooth",block:"start"});
   if(window.innerWidth<=980)toggleNav(false);
 }));
+
+function resetAllProgress(){
+  if(!confirm("Reset your progress and quiz answers? This can't be undone."))return;
+  done.clear();
+  saveProgress();
+  document.querySelectorAll(".mark-done").forEach(btn=>{
+    btn.classList.remove("on");
+    btn.lastChild.textContent="Mark done";
+  });
+  refreshProgress();
+  resetQuiz();
+}
+document.getElementById("resetProgress").addEventListener("click",resetAllProgress);
+document.getElementById("footerReset").addEventListener("click",e=>{e.preventDefault();resetAllProgress();});
 
 refreshProgress();
 </script>
